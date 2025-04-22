@@ -1,40 +1,26 @@
 {
-<<<<<<< HEAD
-    "name": "discord-api-bot",
-    "version": "1.0.0",
-    "main": "index.js",
-    "scripts": {
-        "start": "node index.js"
-    },
-    "dependencies": {
-        "discord.js": "^14.18.0",
-        "dotenv": "^16.5.0",
-        "express": "^4.21.2"
-    },
-    "description": "",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/Paxai/bot.git"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "type": "commonjs",
-    "bugs": {
-        "url": "https://github.com/Paxai/bot/issues"
-    },
-    "homepage": "https://github.com/Paxai/bot#readme"
-=======
-  "name": "discord-member-api",
+  "name": "discord-api-bot",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.0.0",
-    "dotenv": "^16.0.0",
-    "express": "^4.18.2"
-  }
->>>>>>> c9185fa0b96f16b8e8646f963bb49fe1e90878c4
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2"
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Paxai/bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Paxai/bot/issues"
+  },
+  "homepage": "https://github.com/Paxai/bot#readme"
 }
