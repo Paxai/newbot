@@ -5,6 +5,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware do obsługi JSON (ważne!)
+app.use(express.json());
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -16,21 +19,26 @@ const client = new Client({
 const GUILD_ID = '1359567770827751584';
 const ROLE_ID = '1361817240512758000';
 
-// Endpoint HTTP do sprawdzania roli użytkownika
-app.get('/check/:userId', async (req, res) => {
-  const userId = req.params.userId;
+/**
+ * Bezpieczny endpoint — POST /check
+ * Wymaga: { "userId": "123..." } w JSON
+ */
+app.post('/check', async (req, res) => {
+  const userId = req.body.userId;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'Brak userId w żądaniu' });
+  }
 
   try {
+    console.log(`Sprawdzam użytkownika: ${userId}`);
     const guild = await client.guilds.fetch(GUILD_ID);
     const member = await guild.members.fetch(userId);
+    const hasRole = member.roles.cache.has(ROLE_ID);
 
-    if (member.roles.cache.has(ROLE_ID)) {
-      return res.json({ status: 'whitelisted' });
-    } else {
-      return res.json({ status: 'non-whitelisted' });
-    }
+    return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
   } catch (error) {
-    console.error('Błąd przy sprawdzaniu roli:', error);
+    console.error('❌ Błąd przy sprawdzaniu roli:', error);
     return res.status(500).json({ error: 'Nie udało się sprawdzić użytkownika' });
   }
 });
@@ -42,7 +50,7 @@ app.listen(PORT, () => {
 
 // Logowanie bota do Discorda
 client.once('ready', () => {
-  console.log(`Zalogowano jako ${client.user.tag}`);
+  console.log(`✅ Zalogowano jako ${client.user.tag}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
