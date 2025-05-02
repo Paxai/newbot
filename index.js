@@ -19,11 +19,20 @@ const client = new Client({
 const GUILD_ID = '1359567770827751584';
 const ROLE_ID = '1361817240512758000';
 
-/**
- * Bezpieczny endpoint — POST /check
- * Wymaga: { "userId": "123..." } w JSON
- */
-app.post('/check', async (req, res) => {
+// Klucz API – przechowywany w pliku .env
+const API_KEY = process.env.API_KEY || 'tajnyklucz';
+
+// Middleware do sprawdzania klucza API
+const checkApiKey = (req, res, next) => {
+  const apiKey = req.headers['api_key'];
+  if (apiKey !== API_KEY) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  next(); // Kontynuuj, jeśli klucz API jest poprawny
+};
+
+// Endpoint do sprawdzania roli użytkownika (POST)
+app.post('/check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
 
   if (!userId) {
