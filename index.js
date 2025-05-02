@@ -1,27 +1,48 @@
 const express = require('express');
+const { Client, GatewayIntentBits } = require('discord.js');
+require('dotenv').config();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Przykładowa "baza" użytkowników z przypisanymi rolami
-const users = {
-  '1234567890': ['1361817240512758000', '111111111111111111'],
-  '0987654321': ['222222222222222222'],
-  '5555555555': [], // brak ról
-};
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+  ],
+});
 
-const WHITELIST_ROLE = '1361817240512758000';
+// ID serwera i ID roli do sprawdzenia
+const GUILD_ID = 'TWOJE_GUILD_ID';
+const ROLE_ID = '1361817240512758000';
 
-app.get('/check/:userId', (req, res) => {
-  const { userId } = req.params;
-  const roles = users[userId] || [];
+// Endpoint HTTP do sprawdzania roli użytkownika
+app.get('/check/:userId', async (req, res) => {
+  const userId = req.params.userId;
 
-  if (roles.includes(WHITELIST_ROLE)) {
-    return res.json({ status: 'whitelisted' });
-  } else {
-    return res.json({ status: 'non-whitelisted' });
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(userId);
+
+    if (member.roles.cache.has(ROLE_ID)) {
+      return res.json({ status: 'whitelisted' });
+    } else {
+      return res.json({ status: 'non-whitelisted' });
+    }
+  } catch (error) {
+    console.error('Błąd przy sprawdzaniu roli:', error);
+    return res.status(500).json({ error: 'Nie udało się sprawdzić użytkownika' });
   }
 });
 
+// Start serwera HTTP
 app.listen(PORT, () => {
-  console.log(`Bot listening on port ${PORT}`);
+  console.log(`HTTP API działa na porcie ${PORT}`);
 });
+
+// Logowanie bota do Discorda
+client.once('ready', () => {
+  console.log(`Zalogowano jako ${client.user.tag}`);
+});
+
+client.login(process.env.DISCORD_TOKEN);
