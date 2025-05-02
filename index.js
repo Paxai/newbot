@@ -41,9 +41,16 @@ app.post('/check', checkApiKey, async (req, res) => {
 
   try {
     console.log(`Sprawdzam użytkownika: ${userId}`);
+    
+    // Upewnij się, że bot jest połączony i może pobrać guild
     const guild = await client.guilds.fetch(GUILD_ID);
+    console.log(`Połączono z guildą: ${guild.name}`);
+
     const member = await guild.members.fetch(userId);
+    console.log(`Znaleziono członka: ${member.user.tag}`);
+
     const hasRole = member.roles.cache.has(ROLE_ID);
+    console.log(`Czy użytkownik ma rolę: ${hasRole ? 'TAK' : 'NIE'}`);
 
     return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
   } catch (error) {
