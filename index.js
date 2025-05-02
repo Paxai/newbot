@@ -13,7 +13,7 @@ const client = new Client({
 });
 
 // ID serwera i ID roli do sprawdzenia
-const GUILD_ID = 'TWOJE_GUILD_ID';
+const GUILD_ID = '1359567770827751584';
 const ROLE_ID = '1361817240512758000';
 
 // Endpoint HTTP do sprawdzania roli użytkownika
