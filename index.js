@@ -9,11 +9,12 @@ const {
   ButtonStyle,
   Events
 } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-
 app.use(express.json());
 
 const client = new Client({
@@ -44,32 +45,49 @@ const checkApiKey = (req, res, next) => {
   next();
 };
 
-// ✅ CHECK ENDPOINT (czy ma rolę whitelist)
+// 📁 Whitelist submissions (JSON file)
+const submissionFile = path.join(__dirname, 'whitelistSubmissions.json');
+
+function loadSubmissions() {
+  if (!fs.existsSync(submissionFile)) return {};
+  const data = fs.readFileSync(submissionFile, 'utf-8');
+  return JSON.parse(data);
+}
+
+function saveSubmissions(data) {
+  fs.writeFileSync(submissionFile, JSON.stringify(data, null, 2));
+}
+
+// ✅ CHECK ENDPOINT
 app.post('/check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) {
-    return res.status(400).json({ error: 'Brak userId w żądaniu' });
+    return res.status(400).json({ error: 'Missing userId in request' });
   }
 
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     const member = await guild.members.fetch(userId);
-
     const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
     return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
-
   } catch (error) {
-    console.error('❌ Błąd przy sprawdzaniu roli:', error);
-    return res.status(500).json({ error: 'Nie udało się sprawdzić użytkownika' });
+    console.error('❌ Error checking role:', error);
+    return res.status(500).json({ error: 'Failed to check user' });
   }
 });
 
 // 📝 WHITELIST SUBMISSION ENDPOINT
 app.post('/whitelist', checkApiKey, async (req, res) => {
   const { userId, username, formData } = req.body;
-
   if (!userId || !username || !formData) {
-    return res.status(400).json({ error: 'Brak wymaganych pól' });
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const submissions = loadSubmissions();
+  const userSubmissions = submissions[userId] || [];
+
+  if (userSubmissions.length >= 3) {
+    return res.status(429).json({ error: 'Limit of 3 submissions per user has been reached.' });
   }
 
   try {
@@ -92,18 +110,17 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
       const embed = new EmbedBuilder()
         .setColor(0x00AE86)
         .setTimestamp()
-        .setFooter({ text: `Strona ${index + 1} z ${totalPages}` });
+        .setFooter({ text: `Page ${index + 1} of ${totalPages}` });
 
       if (index === 0) {
-        embed
-          .setTitle('📬 Nowa aplikacja whitelist')
-          .setDescription(`Zgłoszenie od: <@${userId}> (${username})`);
+        embed.setTitle('📬 New whitelist application');
+        embed.setDescription(`Submission from: <@${userId}> (${username})`);
       }
 
       chunk.forEach(([key, value]) => {
         embed.addFields({
           name: key,
-          value: String(value).slice(0, 1024) || 'Brak danych',
+          value: String(value).slice(0, 1024) || 'No data',
           inline: false
         });
       });
@@ -114,25 +131,31 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`accept_${userId}`)
-        .setLabel('✅ Akceptuj')
+        .setLabel('✅ Accept')
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId(`reject_${userId}`)
-        .setLabel('❌ Odrzuć')
+        .setLabel('❌ Reject')
         .setStyle(ButtonStyle.Danger)
     );
 
     await channel.send({ embeds, components: [row] });
 
-    return res.json({ success: true, message: 'Embed wysłany' });
+    // Save submission
+    const timestamp = Date.now();
+    userSubmissions.push(timestamp);
+    submissions[userId] = userSubmissions;
+    saveSubmissions(submissions);
+
+    return res.json({ success: true, message: 'Embed sent' });
 
   } catch (error) {
-    console.error('❌ Błąd przy przetwarzaniu whitelist:', error);
-    return res.status(500).json({ error: 'Błąd serwera' });
+    console.error('❌ Error processing whitelist:', error);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// 🎛️ REAKCJE NA PRZYCISKI (Akceptuj / Odrzuć)
+// 🎛️ BUTTON INTERACTIONS
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
@@ -143,40 +166,40 @@ client.on(Events.InteractionCreate, async interaction => {
   try {
     if (action === 'accept') {
       await member.roles.add(WHITELISTED_ROLE_ID);
-      await interaction.reply({ content: `✅ Zaakceptowano <@${userId}>.`, ephemeral: true });
+      await interaction.reply({ content: `✅ Accepted <@${userId}>.`, ephemeral: true });
 
       try {
-        await member.send('🎉 Twoja aplikacja whitelist została zaakceptowana! Witamy na serwerze!');
+        await member.send('🎉 Your whitelist application has been accepted! Welcome to the server!');
       } catch (err) {
-        console.warn('Nie udało się wysłać DM:', err.message);
+        console.warn('Failed to send DM:', err.message);
       }
 
     } else if (action === 'reject') {
       await member.roles.add(REJECTED_ROLE_ID);
-      await interaction.reply({ content: `❌ Odrzucono <@${userId}>.`, ephemeral: true });
+      await interaction.reply({ content: `❌ Rejected <@${userId}>.`, ephemeral: true });
 
       try {
-        await member.send('😞 Twoja aplikacja whitelist została odrzucona. Spróbuj ponownie później.');
+        await member.send('😞 Your whitelist application has been rejected. Please try again later.');
       } catch (err) {
-        console.warn('Nie udało się wysłać DM:', err.message);
+        console.warn('Failed to send DM:', err.message);
       }
     }
   } catch (err) {
-    console.error('❌ Błąd przy obsłudze przycisku:', err);
-    await interaction.reply({ content: '❌ Wystąpił błąd podczas przetwarzania akcji.', ephemeral: true });
+    console.error('❌ Error handling button:', err);
+    await interaction.reply({ content: '❌ An error occurred while processing the action.', ephemeral: true });
   }
 });
 
-// 🌐 Start serwera
+// 🌐 Start server
 app.listen(PORT, () => {
-  console.log(`🌐 HTTP API działa na porcie ${PORT}`);
+  console.log(`🌐 HTTP API running on port ${PORT}`);
 });
 
-// 🔑 Logowanie bota
+// 🔑 Bot login
 client.once('ready', () => {
-  console.log(`✅ Zalogowano jako ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 client.login(process.env.DISCORD_TOKEN).catch(err => {
-  console.error('❌ Błąd logowania bota:', err);
+  console.error('❌ Bot login error:', err);
 });
