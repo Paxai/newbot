@@ -35,7 +35,7 @@ const WHITELISTED_ROLE_ID = '1361817240512758000';
 const REJECTED_ROLE_ID = '1361817341935222845';
 const API_KEY = process.env.API_KEY;
 
-// 🔐 API KEY middleware
+// API KEY middleware
 const checkApiKey = (req, res, next) => {
   const apiKey = req.headers['api_key'];
   if (apiKey !== API_KEY) {
@@ -44,7 +44,7 @@ const checkApiKey = (req, res, next) => {
   next();
 };
 
-// ✅ CHECK ENDPOINT (czy ma rolę whitelist)
+// CHECK ENDPOINT
 app.post('/check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) {
@@ -54,17 +54,16 @@ app.post('/check', checkApiKey, async (req, res) => {
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     const member = await guild.members.fetch(userId);
-
     const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
-    return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
 
+    return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
   } catch (error) {
     console.error('❌ Błąd przy sprawdzaniu roli:', error);
     return res.status(500).json({ error: 'Nie udało się sprawdzić użytkownika' });
   }
 });
 
-// 📝 WHITELIST SUBMISSION ENDPOINT
+// WHITELIST SUBMISSION
 app.post('/whitelist', checkApiKey, async (req, res) => {
   const { userId, username, formData } = req.body;
 
@@ -77,14 +76,27 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
     const member = await guild.members.fetch(userId);
     const channel = await guild.channels.fetch(CHANNEL_ID);
 
-    const embed = new EmbedBuilder()
-      .setTitle('📬 Nowa aplikacja whitelist')
-      .setDescription(`Zgłoszenie od: <@${userId}> (${username})`)
-      .setColor(0x00AE86)
-      .setTimestamp();
+    const formEntries = Object.entries(formData);
+    const MAX_FIELDS = 25;
+    const embeds = [];
 
-    for (const [key, value] of Object.entries(formData)) {
-      embed.addFields({ name: key, value: String(value), inline: false });
+    for (let i = 0; i < formEntries.length; i += MAX_FIELDS) {
+      const chunk = formEntries.slice(i, i + MAX_FIELDS);
+      const embed = new EmbedBuilder()
+        .setColor(0x00AE86)
+        .setTimestamp();
+
+      if (i === 0) {
+        embed
+          .setTitle('📬 Nowa aplikacja whitelist')
+          .setDescription(`Zgłoszenie od: <@${userId}> (${username})`);
+      }
+
+      for (const [key, value] of chunk) {
+        embed.addFields({ name: key, value: String(value).slice(0, 1024), inline: false });
+      }
+
+      embeds.push(embed);
     }
 
     const row = new ActionRowBuilder().addComponents(
@@ -98,7 +110,7 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await channel.send({ embeds: [embed], components: [row] });
+    await channel.send({ embeds, components: [row] });
 
     return res.json({ success: true, message: 'Embed wysłany' });
 
@@ -108,15 +120,16 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
   }
 });
 
-// 🎛️ REAKCJE NA PRZYCISKI (Akceptuj / Odrzuć)
+// PRZYCISKI
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
   const [action, userId] = interaction.customId.split('_');
-  const guild = await client.guilds.fetch(GUILD_ID);
-  const member = await guild.members.fetch(userId);
 
   try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(userId);
+
     if (action === 'accept') {
       await member.roles.add(WHITELISTED_ROLE_ID);
       await interaction.reply({ content: `✅ Zaakceptowano <@${userId}>.`, ephemeral: true });
@@ -137,18 +150,19 @@ client.on(Events.InteractionCreate, async interaction => {
         console.warn('Nie udało się wysłać DM:', err.message);
       }
     }
+
   } catch (err) {
     console.error('❌ Błąd przy obsłudze przycisku:', err);
     await interaction.reply({ content: '❌ Wystąpił błąd podczas przetwarzania akcji.', ephemeral: true });
   }
 });
 
-// 🌐 Start serwera
+// Start serwera
 app.listen(PORT, () => {
   console.log(`🌐 HTTP API działa na porcie ${PORT}`);
 });
 
-// 🔑 Logowanie bota
+// Logowanie bota
 client.once('ready', () => {
   console.log(`✅ Zalogowano jako ${client.user.tag}`);
 });
