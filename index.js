@@ -58,7 +58,7 @@ function saveSubmissions(data) {
   fs.writeFileSync(submissionFile, JSON.stringify(data, null, 2));
 }
 
-// ✅ CHECK ENDPOINT
+// ✅ CHECK ENDPOINT (istniejący)
 app.post('/check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) {
@@ -73,6 +73,24 @@ app.post('/check', checkApiKey, async (req, res) => {
   } catch (error) {
     console.error('❌ Error checking role:', error);
     return res.status(500).json({ error: 'Failed to check user' });
+  }
+});
+
+// ✅ NOWY ENDPOINT ROLE CHECK
+app.post('/role-check', checkApiKey, async (req, res) => {
+  const userId = req.body.userId;
+  if (!userId) {
+    return res.status(400).json({ error: 'Missing userId in request' });
+  }
+
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(userId);
+    const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
+    return res.json({ status: hasRole ? 'hasRole' : 'noRole' });
+  } catch (error) {
+    console.error('❌ Error checking role:', error);
+    return res.status(500).json({ error: 'Failed to check user role' });
   }
 });
 
