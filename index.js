@@ -58,7 +58,7 @@ function saveSubmissions(data) {
   fs.writeFileSync(submissionFile, JSON.stringify(data, null, 2));
 }
 
-// ✅ CHECK ENDPOINT (istniejący)
+// ✅ CHECK ENDPOINT (poprawiony)
 app.post('/check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) {
@@ -67,16 +67,25 @@ app.post('/check', checkApiKey, async (req, res) => {
 
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
-    const member = await guild.members.fetch(userId);
-    const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
-    return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
+    
+    // Sprawdź czy użytkownik jest na serwerze
+    try {
+      const member = await guild.members.fetch(userId);
+      const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
+      return res.json({ status: hasRole ? 'whitelisted' : 'non-whitelisted' });
+    } catch (fetchError) {
+      // Jeśli nie można pobrać członka, oznacza to że nie jest na serwerze
+      console.log(`User ${userId} not found on server`);
+      return res.json({ status: 'not-on-server' });
+    }
+    
   } catch (error) {
     console.error('❌ Error checking role:', error);
     return res.status(500).json({ error: 'Failed to check user' });
   }
 });
 
-// ✅ NOWY ENDPOINT ROLE CHECK
+// ✅ NOWY ENDPOINT ROLE CHECK (poprawiony)
 app.post('/role-check', checkApiKey, async (req, res) => {
   const userId = req.body.userId;
   if (!userId) {
@@ -85,16 +94,25 @@ app.post('/role-check', checkApiKey, async (req, res) => {
 
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
-    const member = await guild.members.fetch(userId);
-    const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
-    return res.json({ status: hasRole ? 'hasRole' : 'noRole' });
+    
+    // Sprawdź czy użytkownik jest na serwerze
+    try {
+      const member = await guild.members.fetch(userId);
+      const hasRole = member.roles.cache.has(WHITELISTED_ROLE_ID);
+      return res.json({ status: hasRole ? 'hasRole' : 'noRole' });
+    } catch (fetchError) {
+      // Jeśli nie można pobrać członka, oznacza to że nie jest na serwerze
+      console.log(`User ${userId} not found on server`);
+      return res.json({ status: 'not-on-server' });
+    }
+    
   } catch (error) {
     console.error('❌ Error checking role:', error);
     return res.status(500).json({ error: 'Failed to check user role' });
   }
 });
 
-// 📝 WHITELIST SUBMISSION ENDPOINT
+// 📝 WHITELIST SUBMISSION ENDPOINT (poprawiony)
 app.post('/whitelist', checkApiKey, async (req, res) => {
   const { userId, username, formData } = req.body;
   if (!userId || !username || !formData) {
@@ -110,7 +128,15 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
 
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
-    const member = await guild.members.fetch(userId);
+    
+    // Sprawdź czy użytkownik jest na serwerze
+    try {
+      const member = await guild.members.fetch(userId);
+    } catch (fetchError) {
+      console.log(`User ${userId} not found on server`);
+      return res.status(400).json({ error: 'User not found on server. Please join the Discord server first.' });
+    }
+    
     const channel = await guild.channels.fetch(CHANNEL_ID);
 
     const formEntries = Object.entries(formData);
@@ -179,9 +205,10 @@ client.on(Events.InteractionCreate, async interaction => {
 
   const [action, userId] = interaction.customId.split('_');
   const guild = await client.guilds.fetch(GUILD_ID);
-  const member = await guild.members.fetch(userId);
-
+  
   try {
+    const member = await guild.members.fetch(userId);
+
     if (action === 'accept') {
       await member.roles.add(WHITELISTED_ROLE_ID);
       await interaction.reply({ content: `✅ Accepted <@${userId}>.`, ephemeral: true });
@@ -203,8 +230,8 @@ client.on(Events.InteractionCreate, async interaction => {
       }
     }
   } catch (err) {
-    console.error('❌ Error handling button:', err);
-    await interaction.reply({ content: '❌ An error occurred while processing the action.', ephemeral: true });
+    console.error('❌ Error handling button (user might have left server):', err);
+    await interaction.reply({ content: `❌ Error: User <@${userId}> not found on server (may have left).`, ephemeral: true });
   }
 });
 
