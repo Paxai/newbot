@@ -199,7 +199,90 @@ app.post('/whitelist', checkApiKey, async (req, res) => {
   }
 });
 
-// 🎛️ BUTTON INTERACTIONS
+// 🔧 ADMIN ACTION ENDPOINT - dla panelu administracyjnego
+app.post('/admin-action', checkApiKey, async (req, res) => {
+  const { userId, action } = req.body;
+  
+  if (!userId || !action) {
+    return res.status(400).json({ error: 'Missing userId or action in request' });
+  }
+
+  if (!['accept', 'reject'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action. Must be "accept" or "reject"' });
+  }
+
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    
+    // Sprawdź czy użytkownik jest na serwerze
+    try {
+      const member = await guild.members.fetch(userId);
+
+      if (action === 'accept') {
+        // Usuń rejected role jeśli istnieje
+        if (member.roles.cache.has(REJECTED_ROLE_ID)) {
+          await member.roles.remove(REJECTED_ROLE_ID);
+        }
+        
+        // Dodaj whitelisted role
+        await member.roles.add(WHITELISTED_ROLE_ID);
+        
+        // Wyślij DM
+        try {
+          await member.send('🎉 Your whitelist application has been accepted! Welcome to the server!');
+        } catch (err) {
+          console.warn('Failed to send acceptance DM:', err.message);
+        }
+
+        console.log(`✅ User ${userId} has been whitelisted via admin panel`);
+        return res.json({ 
+          success: true, 
+          message: `User ${userId} has been whitelisted`,
+          action: 'accepted'
+        });
+
+      } else if (action === 'reject') {
+        // Usuń whitelisted role jeśli istnieje
+        if (member.roles.cache.has(WHITELISTED_ROLE_ID)) {
+          await member.roles.remove(WHITELISTED_ROLE_ID);
+        }
+        
+        // Dodaj rejected role
+        await member.roles.add(REJECTED_ROLE_ID);
+        
+        // Wyślij DM
+        try {
+          await member.send('😞 Your whitelist application has been rejected. Please try again later.');
+        } catch (err) {
+          console.warn('Failed to send rejection DM:', err.message);
+        }
+
+        console.log(`❌ User ${userId} has been rejected via admin panel`);
+        return res.json({ 
+          success: true, 
+          message: `User ${userId} has been rejected`,
+          action: 'rejected'
+        });
+      }
+
+    } catch (fetchError) {
+      console.log(`User ${userId} not found on server`);
+      return res.status(404).json({ 
+        error: 'User not found on server. User may have left the server.',
+        userId: userId
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in admin action:', error);
+    return res.status(500).json({ 
+      error: 'Failed to process admin action',
+      details: error.message
+    });
+  }
+});
+
+// 🎛️ BUTTON INTERACTIONS (pozostają bez zmian - dla przycisków w embedach)
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
@@ -210,6 +293,11 @@ client.on(Events.InteractionCreate, async interaction => {
     const member = await guild.members.fetch(userId);
 
     if (action === 'accept') {
+      // Usuń rejected role jeśli istnieje
+      if (member.roles.cache.has(REJECTED_ROLE_ID)) {
+        await member.roles.remove(REJECTED_ROLE_ID);
+      }
+      
       await member.roles.add(WHITELISTED_ROLE_ID);
       await interaction.reply({ content: `✅ Accepted <@${userId}>.`, ephemeral: true });
 
@@ -220,6 +308,11 @@ client.on(Events.InteractionCreate, async interaction => {
       }
 
     } else if (action === 'reject') {
+      // Usuń whitelisted role jeśli istnieje
+      if (member.roles.cache.has(WHITELISTED_ROLE_ID)) {
+        await member.roles.remove(WHITELISTED_ROLE_ID);
+      }
+      
       await member.roles.add(REJECTED_ROLE_ID);
       await interaction.reply({ content: `❌ Rejected <@${userId}>.`, ephemeral: true });
 
@@ -238,11 +331,20 @@ client.on(Events.InteractionCreate, async interaction => {
 // 🌐 Start server
 app.listen(PORT, () => {
   console.log(`🌐 HTTP API running on port ${PORT}`);
+  console.log(`📋 Available endpoints:`);
+  console.log(`   POST /check - Check user whitelist status`);
+  console.log(`   POST /role-check - Check user role`);
+  console.log(`   POST /whitelist - Submit whitelist application`);
+  console.log(`   POST /admin-action - Admin panel actions (accept/reject)`);
 });
 
 // 🔑 Bot login
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`🏠 Connected to guild: ${GUILD_ID}`);
+  console.log(`📝 Whitelist channel: ${CHANNEL_ID}`);
+  console.log(`✅ Whitelisted role: ${WHITELISTED_ROLE_ID}`);
+  console.log(`❌ Rejected role: ${REJECTED_ROLE_ID}`);
 });
 
 client.login(process.env.DISCORD_TOKEN).catch(err => {
